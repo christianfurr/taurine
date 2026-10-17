@@ -1,0 +1,4 @@
+interface:
+  display_name: "Taurine Control"
+  short_description: "Control Mac keep-awake and allow sleep remotely"
+  default_prompt: "Use $taurine-control to check whether my Mac is staying awake."
