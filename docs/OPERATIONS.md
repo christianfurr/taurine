@@ -28,11 +28,19 @@ The native bridge recognizes both `com.christianfurr.Taurine` and the former `co
 
 `scripts/build-automation.sh` also compiles the native bridge. All signatures are local/ad hoc. Release binaries are not Developer ID notarized. Intel builds have not been tested.
 
+## Update checks
+
+Choose **Check for Updates…** in the menu to request the latest stable release from the public GitHub API. Checks happen only on demand. The app compares numeric versions, validates release/download URLs against this repository, and selects the asset matching its compiled architecture. If the release has no matching binary, it links to the release page instead.
+
+The **Download Update** button opens the published ZIP in your browser. Installation and restarting are manual. Update checks do not quit the app, modify sleep settings, or install anything in the background. Errors restore the menu action so you can retry.
+
 ## Verification
 
 The helper tests run the actual socket protocol with an in-memory power backend under AddressSanitizer and UndefinedBehaviorSanitizer. They cover parsing, enable/readback/disable, preserving an original disabled setting, disconnect cleanup, heartbeat expiry, partial enable failure, low battery at startup and during a session, cancellation, and invalid commands.
 
 Automation tests mock process creation and cover status parsing, legacy watchdog recognition, idempotent enable, confirmation rejection, safe preview, scheduling a specific process, refusing external setting changes, refusing ambiguous instances, and reporting pending authorization truthfully.
+
+The update tests cover numeric version ordering, invalid versions, architecture selection, draft/prerelease rejection, and repository URL validation. Run `build/update-tests --live` after the test build to exercise the actual public GitHub release endpoint without installing or restarting anything.
 
 During a live session on October 17, 2026, the OS reported `AppleClamshellState = Yes` and `SleepDisabled 1` while commands continued executing. An actual MCP client initialized the server, discovered the three tools, read status, verified a no-op enable, previewed disable, and verified rejection without confirmation. The active app and watchdog PIDs remained unchanged.
 

@@ -20,7 +20,7 @@ jobs:
           python-version: '3.13'
       - name: Build and verify signed bundles
         run: ./scripts/build-automation.sh
-      - name: Verify watchdog protocol with sanitizers
+      - name: Verify watchdog and update checks
         run: ./scripts/test.sh
       - name: Verify automation without touching power settings
         run: python3 tests/automation_test.py

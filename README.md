@@ -11,11 +11,15 @@ named after the stuff in energy drinks.
 
 click the lightning bolt, turn it on, approve the macOS prompt. then you can close the lid and keep working remotely. the screen can turn off and the mac can stay locked.
 
+the menu has the timer, switch, about, check for updates, and quit. the extra info lives in About Taurine.
+
+Check for Updates checks the latest github release and opens the right download for your mac. you replace the app yourself when youre ready. it wont restart taurine halfway through your tasks.
+
 theres an mcp server and a skill too, so you can ask codex to turn it off when youre done.
 
 ## get it
 
-[download for apple silicon](https://github.com/christianfurr/taurine/releases/download/v1.1.0/Taurine-macOS-arm64.zip)
+[download for apple silicon](https://github.com/christianfurr/taurine/releases/latest/download/Taurine-macOS-arm64.zip)
 
 unzip it, move `Taurine.app` to Applications, open it. thats it.
 
@@ -79,6 +83,6 @@ if youre using the old Caffeine version, the controls recognize that too. instal
 python3 tests/automation_test.py
 ```
 
-19 checks, including the watchdog and the automation previews. github runs them too.
+checks for the watchdog, update versions/download links, and automation previews. github runs them too.
 
 also checked the lid-closed state on a real mac while remote commands kept working. checked mcp status and previews without restarting the running app. havent tested an actual remote disable or a fresh privileged enable end to end yet. [more detail if you want it](docs/OPERATIONS.md#verification)

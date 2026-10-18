@@ -109,6 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let menu = NSMenu()
     private var toggleItem: NSMenuItem!
     private var sessionItem: NSMenuItem!
+    private var updateItem: NSMenuItem!
     private var connection: PowerConnection?
     private var timer: Timer?
     private var enabledAt: Date?
@@ -139,12 +140,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         toggleItem = NSMenuItem(title: "Turn Taurine On", action: #selector(toggle), keyEquivalent: "")
         toggleItem.target = self
         menu.addItem(toggleItem)
-        menu.addItem(NSMenuItem(title: "Keeps your Mac awake with the lid closed", action: nil, keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Display can still turn off", action: nil, keyEquivalent: ""))
         menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Auto-off at 10% battery", action: nil, keyEquivalent: ""))
-        menu.addItem(NSMenuItem(title: "Turn off before putting your Mac in a bag", action: nil, keyEquivalent: ""))
-        menu.addItem(.separator())
+        let about = NSMenuItem(title: "About Taurine…", action: #selector(showAbout), keyEquivalent: "")
+        about.target = self
+        menu.addItem(about)
+        updateItem = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        updateItem.target = self
+        menu.addItem(updateItem)
         let quit = NSMenuItem(title: "Quit Taurine", action: #selector(quitApp), keyEquivalent: "q")
         quit.target = self
         menu.addItem(quit)
@@ -273,6 +275,72 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         alert.runModal()
     }
 
+    @objc private func showAbout() {
+        let details = NSAttributedString(
+            string: "Keeps your Mac awake with the lid closed.\n\nThe display can still turn off. Taurine stops at 10% battery while unplugged and restores your previous sleep setting when the session ends.\n\nTurn Taurine off before putting your Mac in a bag.",
+            attributes: [.font: NSFont.systemFont(ofSize: 12)]
+        )
+        NSApp.activate(ignoringOtherApps: true)
+        NSApp.orderFrontStandardAboutPanel(options: [.credits: details])
+    }
+
+    @objc private func checkForUpdates() {
+        guard updateItem.isEnabled else { return }
+        updateItem.isEnabled = false
+        updateItem.title = "Checking for Updates…"
+        let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.0"
+        Task {
+            do {
+                let release = try await ReleaseUpdate.latest()
+                await MainActor.run {
+                    self.finishUpdateCheck()
+                    self.presentUpdate(release, currentVersion: current)
+                }
+            } catch {
+                await MainActor.run {
+                    self.finishUpdateCheck()
+                    self.showError("Could not check for updates.\n\n\(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func finishUpdateCheck() {
+        updateItem.title = "Check for Updates…"
+        updateItem.isEnabled = true
+    }
+
+    private func presentUpdate(_ release: ReleaseUpdate, currentVersion: String) {
+        guard let current = AppVersion(currentVersion) else {
+            showError("Taurine could not read its current version.")
+            return
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        if release.version > current {
+            alert.messageText = "Taurine \(release.versionLabel) is available"
+            if release.downloadURL != nil {
+                alert.informativeText = "You're running \(currentVersion). Download the update, then replace the app when you're ready to stop your current session. Taurine won't quit or install anything automatically."
+                alert.addButton(withTitle: "Download Update")
+            } else {
+                alert.informativeText = "You're running \(currentVersion). This release doesn't include a download for your Mac's architecture. You can view the release and build from source."
+                alert.addButton(withTitle: "View Release")
+            }
+            alert.addButton(withTitle: "Later")
+            if alert.runModal() == .alertFirstButtonReturn {
+                if !NSWorkspace.shared.open(release.downloadURL ?? release.releaseURL) {
+                    showError("Could not open the download. Visit github.com/christianfurr/taurine/releases in your browser.")
+                }
+            }
+        } else {
+            alert.messageText = "You're up to date"
+            alert.informativeText = "Taurine \(currentVersion) is installed."
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        }
+    }
+
     @objc private func quitApp() { NSApp.terminate(nil) }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -291,7 +359,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 }
 
-let app = NSApplication.shared
-let delegate = AppDelegate()
-app.delegate = delegate
-app.run()
+@main
+struct TaurineApp {
+    static func main() {
+        let app = NSApplication.shared
+        let delegate = AppDelegate()
+        app.delegate = delegate
+        withExtendedLifetime(delegate) { app.run() }
+    }
+}

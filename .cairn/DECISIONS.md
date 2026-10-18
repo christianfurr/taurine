@@ -8,3 +8,5 @@
 - 2026-10-17: User requested MCP and skill; clarified that off means allow sleep, not shutdown. Do not turn off Caffeine while important Codex tasks run. Install the automation app separately so the active menu app and root watchdog keep their PIDs.
 - 2026-10-17: Disable requires an explicit intent flag and has a preview mode. Real disable schedules graceful quit after three seconds so the remote caller can receive the response. Enable still requires macOS approval when starting a new privileged session.
 - 2026-10-17: User chose Taurine, after the energy drink ingredient, for public branding and GitHub publication. Keep the current Caffeine installation running; the public bridge recognizes it and the shared watchdog lock remains compatible.
+- 2026-10-17: Keep the menu compact: timer, on/off, About, and Quit. Move explanatory and safety copy into the native About panel. Build updates separately while a keep-awake session is active.
+- 2026-10-17: Add on-demand Check for Updates using GitHub releases. Offer the correct download and keep installation/restarts manual so updates cannot interrupt a live power session. No automatic polling or new updater dependency.

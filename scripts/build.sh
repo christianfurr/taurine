@@ -10,7 +10,7 @@ xcrun clang -std=c11 -Wall -Wextra -Werror -O2 -target "$ARCH-apple-macos13.0" \
   Sources/PowerSession.c -framework CoreFoundation -framework IOKit \
   -o "$APP/Contents/MacOS/TaurinePower"
 xcrun swiftc -swift-version 5 -O -target "$ARCH-apple-macos13.0" \
-  Sources/Taurine.swift -framework AppKit -o "$APP/Contents/MacOS/Taurine"
+  Sources/Taurine.swift Sources/Updates.swift -framework AppKit -o "$APP/Contents/MacOS/Taurine"
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -20,8 +20,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleName</key><string>Taurine</string>
   <key>CFBundleDisplayName</key><string>Taurine</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.1.0</string>
-  <key>CFBundleVersion</key><string>2</string>
+  <key>CFBundleShortVersionString</key><string>1.2.0</string>
+  <key>CFBundleVersion</key><string>4</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
