@@ -110,6 +110,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var toggleItem: NSMenuItem!
     private var sessionItem: NSMenuItem!
     private var updateItem: NSMenuItem!
+    private var idleLockItem: NSMenuItem!
+    private var idleProcess: Process?
+    private var idleInput: FileHandle?
+    private var idleLockActive = false
+    private var afterIdleStop: (() -> Void)?
+    private let idleLockPreference = "preventIdleLock"
     private var connection: PowerConnection?
     private var timer: Timer?
     private var enabledAt: Date?
@@ -127,6 +133,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard instanceLock >= 0, flock(instanceLock, LOCK_EX | LOCK_NB) == 0 else {
             NSApp.terminate(nil); return
         }
+        IdleLockGuard.recover()
+        signal(SIGPIPE, SIG_IGN)
         NSApp.setActivationPolicy(.accessory)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.menu = menu
@@ -140,6 +148,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         toggleItem = NSMenuItem(title: "Turn Taurine On", action: #selector(toggle), keyEquivalent: "")
         toggleItem.target = self
         menu.addItem(toggleItem)
+        idleLockItem = NSMenuItem(title: "Prevent Idle Lock", action: #selector(toggleIdleLockPreference), keyEquivalent: "")
+        idleLockItem.target = self
+        menu.addItem(idleLockItem)
         menu.addItem(.separator())
         let about = NSMenuItem(title: "About Taurine…", action: #selector(showAbout), keyEquivalent: "")
         about.target = self
@@ -155,6 +166,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         timer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
             guard let self else { return }
             self.connection?.send(72) // H: lease heartbeat, even while awaiting pmset.
+            if let input = self.idleInput {
+                var beat: UInt8 = 72
+                _ = Darwin.write(input.fileDescriptor, &beat, 1)
+            }
             self.refresh()
         }
         if let timer { RunLoop.main.add(timer, forMode: .common) }
@@ -186,20 +201,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         toggleItem.title = busy ? "Updating sleep settings…" : (enabled ? "Turn Taurine Off" : "Turn Taurine On")
         toggleItem.isEnabled = !busy
         toggleItem.state = enabled ? .on : .off
+        idleLockItem.state = UserDefaults.standard.bool(forKey: idleLockPreference) ? .on : .off
+        idleLockItem.isHidden = enabled || busy || idleProcess != nil
         if let enabledAt {
             let elapsed = Int(Date().timeIntervalSince(enabledAt))
-            sessionItem.title = String(format: "Awake for %d:%02d:%02d", elapsed / 3600, elapsed / 60 % 60, elapsed % 60)
+            let duration = String(format: "Awake for %d:%02d:%02d", elapsed / 3600, elapsed / 60 % 60, elapsed % 60)
+            sessionItem.title = idleLockActive ? duration + " · Idle lock paused" : duration
         } else {
             sessionItem.title = busy ? "Waiting for macOS…" : lastMessage
         }
     }
 
     @objc private func toggle() {
-        guard !busy else { return }
+        guard !busy, enabledAt != nil || idleProcess == nil else { return }
         busy = true
         refresh()
         if let connection {
-            connection.send(68) // D: restore and acknowledge before showing off.
+            stopIdleLock { connection.send(68) }
             return
         }
         lastMessage = "Normal sleep is allowed"
@@ -236,7 +254,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         switch code {
         case 49: // 1: confirmed on
             enabledAt = Date(); busy = false
-            if quitting { busy = true; connection?.send(68) }
+            if quitting {
+                busy = true
+                stopIdleLock { [weak self] in self?.connection?.send(68) }
+            } else if UserDefaults.standard.bool(forKey: idleLockPreference) {
+                startIdleLock()
+            }
         case 48: // 0: prior setting restored
             lastMessage = "Previous sleep setting restored"
         case 66:
@@ -253,6 +276,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func ended(unexpected: Bool) {
         let wasEnabled = enabledAt != nil
+        stopIdleLock {}
         connection?.close(); connection = nil
         enabledAt = nil; busy = false
         if wasEnabled && lastMessage == "Normal sleep is allowed" {
@@ -263,6 +287,73 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             showError("The power helper disconnected unexpectedly. Check the sleep setting with pmset -g. To restore normal sleep, run: sudo pmset -a disablesleep 0")
         }
         if quitting { NSApp.reply(toApplicationShouldTerminate: true) }
+    }
+
+    @objc private func toggleIdleLockPreference() {
+        guard enabledAt == nil, !busy else { return }
+        UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: idleLockPreference), forKey: idleLockPreference)
+        refresh()
+    }
+
+    private func startIdleLock() {
+        guard let executable = Bundle.main.executableURL else { return }
+        let process = Process()
+        let input = Pipe()
+        let output = Pipe()
+        process.executableURL = executable
+        process.arguments = ["--idle-lock-guard"]
+        process.standardInput = input
+        process.standardOutput = output
+        process.standardError = FileHandle.nullDevice
+        output.fileHandleForReading.readabilityHandler = { [weak self, weak process] handle in
+            let ready = handle.availableData.first == 82
+            handle.readabilityHandler = nil
+            DispatchQueue.main.async {
+                guard let self, let process, self.idleProcess === process, self.idleInput != nil else { return }
+                self.idleLockActive = ready
+                self.refresh()
+            }
+        }
+        process.terminationHandler = { [weak self] process in
+            DispatchQueue.main.async {
+                guard let self, self.idleProcess === process else { return }
+                let unexpected = self.idleInput != nil
+                try? self.idleInput?.close()
+                self.idleInput = nil
+                self.idleProcess = nil
+                self.idleLockActive = false
+                IdleLockGuard.recover()
+                let action = self.afterIdleStop
+                self.afterIdleStop = nil
+                action?()
+                self.refresh()
+                if unexpected && self.enabledAt != nil && !self.quitting {
+                    self.showError("Could not prevent idle lock. Taurine is still keeping your Mac awake.")
+                }
+            }
+        }
+        do {
+            try process.run()
+            idleProcess = process
+            idleInput = input.fileHandleForWriting
+        } catch {
+            output.fileHandleForReading.readabilityHandler = nil
+            showError("Could not start idle-lock prevention. Taurine is still keeping your Mac awake.")
+        }
+    }
+
+    private func stopIdleLock(then action: @escaping () -> Void) {
+        idleLockActive = false
+        guard let process = idleProcess else { action(); return }
+        if afterIdleStop == nil { afterIdleStop = action }
+        try? idleInput?.close()
+        idleInput = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self, weak process] in
+            guard let self, let process, self.idleProcess === process else { return }
+            let pending = self.afterIdleStop
+            self.afterIdleStop = nil
+            pending?()
+        }
     }
 
     private func showError(_ message: String) {
@@ -277,7 +368,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func showAbout() {
         let details = NSAttributedString(
-            string: "Keeps your Mac awake with the lid closed.\n\nThe display can still turn off. Taurine stops at 10% battery while unplugged and restores your previous sleep setting when the session ends.\n\nTurn Taurine off before putting your Mac in a bag.",
+            string: "Keeps your Mac awake with the lid closed.\n\nEnable Prevent Idle Lock before turning Taurine on to keep the display awake and pause the screen saver. Manual locking still works. Taurine stops at 10% battery while unplugged.\n\nTurn Taurine off before putting your Mac in a bag.",
             attributes: [.font: NSFont.systemFont(ofSize: 12)]
         )
         NSApp.activate(ignoringOtherApps: true)
@@ -347,13 +438,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard connection != nil else { return .terminateNow }
         quitting = true
         busy = true
-        connection?.send(68)
+        stopIdleLock { [weak self] in self?.connection?.send(68) }
         refresh()
         // Wait for the watchdog to confirm restoration before a normal quit.
         return .terminateLater
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        try? idleInput?.close()
         connection?.close()
         if instanceLock >= 0 { Darwin.close(instanceLock) }
     }
@@ -362,6 +454,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 @main
 struct TaurineApp {
     static func main() {
+        if CommandLine.arguments.dropFirst().elementsEqual(["--idle-lock-guard"]) { exit(IdleLockGuard.run()) }
         let app = NSApplication.shared
         let delegate = AppDelegate()
         app.delegate = delegate

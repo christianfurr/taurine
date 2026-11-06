@@ -8,6 +8,7 @@ Native macOS menu bar utility for keeping this Mac reachable with its lid closed
 
 - `Sources/Taurine.swift`: AppKit status item, native menu, authorization and session lifecycle.
 - `Sources/Updates.swift`: on-demand GitHub release checks, numeric versions, and verified download URLs.
+- `Sources/IdleLock.swift`: optional per-session display assertion and recoverable local screen-saver pause.
 - `Sources/PowerSession.c`: privileged, temporary watchdog; applies and restores only `disablesleep`.
 - `Sources/TaurineControl.swift`: native automation bridge; reads instances, requests enable, and schedules graceful quit.
 - `scripts/build.sh`: builds and signs a macOS 13+ app bundle.

@@ -11,6 +11,8 @@ named after the stuff in energy drinks.
 
 click the lightning bolt, turn it on, approve the macOS prompt. then you can close the lid and keep working remotely. the screen can turn off and the mac can stay locked.
 
+if you want to avoid idle locking too, check **Prevent Idle Lock** before turning Taurine on. it keeps the display awake and pauses the screen saver for that session. you can still lock the mac yourself.
+
 the menu has the timer, switch, about, check for updates, and quit. the extra info lives in About Taurine.
 
 Check for Updates checks the latest github release and opens the right download for your mac. you replace the app yourself when youre ready. it wont restart taurine halfway through your tasks.

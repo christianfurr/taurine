@@ -10,3 +10,4 @@
 - 2026-10-17: User chose Taurine, after the energy drink ingredient, for public branding and GitHub publication. Keep the current Caffeine installation running; the public bridge recognizes it and the shared watchdog lock remains compatible.
 - 2026-10-17: Keep the menu compact: timer, on/off, About, and Quit. Move explanatory and safety copy into the native About panel. Build updates separately while a keep-awake session is active.
 - 2026-10-17: Add on-demand Check for Updates using GitHub releases. Offer the correct download and keep installation/restarts manual so updates cannot interrupt a live power session. No automatic polling or new updater dependency.
+- 2026-11-06: Add opt-in Prevent Idle Lock, independent of system sleep prevention. An unprivileged guard owns the display assertion and temporary screen-saver setting; recover the previous timer on exit or next launch. Leave manual lock and password settings alone.

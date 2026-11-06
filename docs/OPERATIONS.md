@@ -34,6 +34,12 @@ Choose **Check for Updates…** in the menu to request the latest stable release
 
 The **Download Update** button opens the published ZIP in your browser. Installation and restarting are manual. Update checks do not quit the app, modify sleep settings, or install anything in the background. Errors restore the menu action so you can retry.
 
+## Prevent Idle Lock
+
+While Taurine is off, select **Prevent Idle Lock**, then turn it on. This opt-in mode adds a display idle-sleep assertion and pauses the local screen-saver timer. It does not change passwords or authentication settings, unlock the Mac, or override a managed screen-saver timer. Manual and system-enforced locks remain possible.
+
+An unprivileged guard holds the assertion and saves the previous screen-saver setting before changing it. It releases the assertion and restores that setting when the session ends, the app disconnects, or heartbeats stop. It preserves any different timer value you choose in System Settings during the session. If the guard itself is killed or power is lost, the next Taurine launch attempts recovery from the saved setting. Normal sleep-only sessions leave display and lock timers alone.
+
 ## Verification
 
 The helper tests run the actual socket protocol with an in-memory power backend under AddressSanitizer and UndefinedBehaviorSanitizer. They cover parsing, enable/readback/disable, preserving an original disabled setting, disconnect cleanup, heartbeat expiry, partial enable failure, low battery at startup and during a session, cancellation, and invalid commands.
